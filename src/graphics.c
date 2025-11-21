@@ -483,11 +483,21 @@ void graphics_fill_rect(graphics_context_t* ctx, const graphics_rect_t* rect, gr
     i32 x2 = rect->x + rect->width;
     i32 y2 = rect->y + rect->height;
     
-    /* Clip to context bounds */
-    if (x1 < 0) x1 = 0;
-    if (y1 < 0) y1 = 0;
-    if (x2 > ctx->width) x2 = ctx->width;
-    if (y2 > ctx->height) y2 = ctx->height;
+    /* Clip to clipping rect if enabled, otherwise to context bounds */
+    if (ctx->clipping_enabled) {
+        if (x1 < ctx->clip_rect.x) x1 = ctx->clip_rect.x;
+        if (y1 < ctx->clip_rect.y) y1 = ctx->clip_rect.y;
+        if (x2 > ctx->clip_rect.x + ctx->clip_rect.width) x2 = ctx->clip_rect.x + ctx->clip_rect.width;
+        if (y2 > ctx->clip_rect.y + ctx->clip_rect.height) y2 = ctx->clip_rect.y + ctx->clip_rect.height;
+    } else {
+        if (x1 < 0) x1 = 0;
+        if (y1 < 0) y1 = 0;
+        if (x2 > ctx->width) x2 = ctx->width;
+        if (y2 > ctx->height) y2 = ctx->height;
+    }
+    
+    /* Early exit if clipped out entirely */
+    if (x1 >= x2 || y1 >= y2) return;
     
     u32 packed = pack_color(color);
     

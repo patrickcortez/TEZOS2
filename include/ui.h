@@ -64,6 +64,7 @@ ENGINE_API void ui_end_frame(ui_context_t* ctx);
 /* Input */
 ENGINE_API void ui_input_mouse_move(ui_context_t* ctx, i32 x, i32 y);
 ENGINE_API void ui_input_mouse_button(ui_context_t* ctx, bool down);
+ENGINE_API void ui_input_mouse_wheel(ui_context_t* ctx, i32 delta);
 ENGINE_API void ui_input_key(ui_context_t* ctx, i32 key, bool down);
 ENGINE_API void ui_input_char(ui_context_t* ctx, char c);
 

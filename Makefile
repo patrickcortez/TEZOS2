@@ -33,8 +33,9 @@ endif
 # Platform-specific settings
 ifeq ($(UNAME_S), Linux)
     PLATFORM := linux
-    PLATFORM_SRC := $(PLATFORM_DIR)/platform_x11.c
+    PLATFORM_SRC := $(PLATFORM_DIR)/platform_linux.c
     LDFLAGS += -lX11 -lpthread -ldl -lm
+    LDFLAGS += -lpthread -ldl -lm
     CFLAGS += -DENGINE_PLATFORM_LINUX
 endif
 
@@ -63,7 +64,7 @@ ifneq (,$(findstring MSYS,$(UNAME_S)))
 endif
 
 # Source files
-ENGINE_SRCS := $(SRC_DIR)/engine.c $(SRC_DIR)/graphics.c $(SRC_DIR)/ui.c $(SRC_DIR)/input.c $(SRC_DIR)/audio.c $(SRC_DIR)/dialogs.c $(PLATFORM_SRC)
+ENGINE_SRCS := $(SRC_DIR)/engine.c $(SRC_DIR)/graphics.c $(SRC_DIR)/ui.c $(SRC_DIR)/window.c $(SRC_DIR)/input.c $(SRC_DIR)/audio.c $(SRC_DIR)/dialogs.c $(SRC_DIR)/tinyfiledialogs.c $(PLATFORM_SRC)
 ENGINE_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(notdir $(ENGINE_SRCS)))
 
 # Examples
@@ -75,6 +76,7 @@ INPUT_DEMO_TARGET = $(BUILD_DIR)/input_demo$(if $(findstring windows,$(PLATFORM)
 FORMS_DEMO_TARGET = $(BUILD_DIR)/forms_demo$(if $(findstring windows,$(PLATFORM)),.exe,)
 AUDIO_DEMO_TARGET = $(BUILD_DIR)/audio_demo$(if $(findstring windows,$(PLATFORM)),.exe,)
 FILE_LIST_DEMO_TARGET = $(BUILD_DIR)/file_list_demo$(if $(findstring windows,$(PLATFORM)),.exe,)
+WINDOW_DEMO_TARGET = $(BUILD_DIR)/window_demo$(if $(findstring windows,$(PLATFORM)),.exe,)
 
 # Example sources
 EXAMPLE_SRC := $(EXAMPLE_DIR)/basic_window.c
@@ -97,6 +99,9 @@ AUDIO_DEMO_OBJ := $(BUILD_DIR)/audio_demo.o
 
 FILE_LIST_DEMO_SRC := $(EXAMPLE_DIR)/file_list_demo.c
 FILE_LIST_DEMO_OBJ := $(BUILD_DIR)/file_list_demo.o
+
+WINDOW_DEMO_SRC := $(EXAMPLE_DIR)/window_demo.c
+WINDOW_DEMO_OBJ := $(BUILD_DIR)/window_demo.o
 
 # Default target
 .PHONY: all
@@ -124,6 +129,10 @@ $(BUILD_DIR)/ui.o: $(SRC_DIR)/ui.c | $(BUILD_DIR)
 	@echo "Compiling ui.c..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/window.o: $(SRC_DIR)/window.c | $(BUILD_DIR)
+	@echo "Compiling window.c..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/input.o: $(SRC_DIR)/input.c | $(BUILD_DIR)
 	@echo "Compiling input.c..."
 	@$(CC) $(CFLAGS) -c $< -o $@
@@ -136,8 +145,12 @@ $(BUILD_DIR)/dialogs.o: $(SRC_DIR)/dialogs.c | $(BUILD_DIR)
 	@echo "Compiling dialogs.c..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/platform_x11.o: $(PLATFORM_DIR)/platform_x11.c | $(BUILD_DIR)
-	@echo "Compiling platform_x11.c..."
+$(BUILD_DIR)/tinyfiledialogs.o: $(SRC_DIR)/tinyfiledialogs.c | $(BUILD_DIR)
+	@echo "Compiling tinyfiledialogs.c..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/platform_linux.o: $(PLATFORM_DIR)/platform_linux.c | $(BUILD_DIR)
+	@echo "Compiling platform_linux.c..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/platform_win32.o: $(PLATFORM_DIR)/platform_win32.c | $(BUILD_DIR)
@@ -214,6 +227,11 @@ $(FILE_LIST_DEMO_TARGET): examples/file_list_demo.c $(LIB_TARGET)
 	@echo "Compiling file_list_demo example..."
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "Built file_list_demo"
+
+$(WINDOW_DEMO_TARGET): examples/window_demo.c $(LIB_TARGET)
+	@echo "Compiling window_demo example..."
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Built window_demo"
 
 # Run example
 .PHONY: run

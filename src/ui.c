@@ -47,6 +47,7 @@ struct ui_context {
     i32 last_key;
     bool key_down;
     char input_char;
+    i32 mouse_wheel_delta;
     
     /* Widget state */
     ui_id_t hot_id;      /* Widget under mouse */
@@ -59,6 +60,14 @@ struct ui_context {
     i32 popup_cursor_x, popup_cursor_y;
     ui_popup_cmd_t popup_commands[UI_MAX_POPUP_COMMANDS];
     i32 popup_command_count;
+    
+    /* Scroll state */
+    i32 scroll_offset_x, scroll_offset_y;
+    i32 content_width, content_height;
+    i32 viewport_width, viewport_height;
+    graphics_rect_t window_bounds;
+    i32 max_content_y;  /* Track maximum Y position for content */
+    bool in_scroll_region;
     
     /* Layout stack */
     ui_layout_t layout_stack[UI_MAX_LAYOUT_STACK];
@@ -166,6 +175,26 @@ void ui_begin_frame(ui_context_t* ctx) {
 void ui_end_frame(ui_context_t* ctx) {
     if (!ctx) return;
     
+    /* Render popups on top */
+    for (i32 i = 0; i < ctx->popup_command_count; i++) {
+        ui_popup_cmd_t* cmd = &ctx->popup_commands[i];
+        switch (cmd->type) {
+            case UI_POPUP_CMD_RECT:
+                graphics_fill_rect(ctx->gfx, &cmd->rect, cmd->color);
+                /* Optional border for popups */
+                graphics_draw_rect(ctx->gfx, &cmd->rect, ctx->style.border);
+                break;
+            case UI_POPUP_CMD_TEXT:
+                graphics_draw_text(ctx->gfx, cmd->text, cmd->rect.x, cmd->rect.y, cmd->color, cmd->font);
+                break;
+            default:
+                break;
+        }
+    }
+    
+    /* Reset popup commands for next frame */
+    ctx->popup_command_count = 0;
+    
     /* Clear active if mouse released */
     if (!ctx->mouse_down && ctx->mouse_was_down) {
         ctx->active_id = 0;
@@ -188,6 +217,11 @@ void ui_input_mouse_move(ui_context_t* ctx, i32 x, i32 y) {
 void ui_input_mouse_button(ui_context_t* ctx, bool down) {
     if (!ctx) return;
     ctx->mouse_down = down;
+}
+
+void ui_input_mouse_wheel(ui_context_t* ctx, i32 delta) {
+    if (!ctx) return;
+    ctx->mouse_wheel_delta = delta;
 }
 
 void ui_input_key(ui_context_t* ctx, i32 key, bool down) {
@@ -238,16 +272,23 @@ void ui_same_line(ui_context_t* ctx) {
 /* Container widgets */
 bool ui_begin_window(ui_context_t* ctx, const char* title, i32 x, i32 y, i32 width, i32 height) {
     if (!ctx) return false;
-    ENGINE_UNUSED(title);
     
-    /* Simple window - just a background rect */
+    /* Setup scroll region */
+    ctx->in_scroll_region = true;
+    ctx->window_bounds = graphics_rect(x, y, width, height);
+    ctx->viewport_width = width - ctx->style.scroll_bar_width;
+    ctx->viewport_height = height - 24 - ctx->style.padding; /* Title + padding */
+    
+    /* Handle mouse wheel scrolling */
+    if (ctx->mouse_wheel_delta != 0) {
+        ctx->scroll_offset_y -= ctx->mouse_wheel_delta * 20; /* 20 pixels per wheel notch */
+        ctx->mouse_wheel_delta = 0; /* Consume the event */
+    }
+    
+    /* Draw window background */
     graphics_rect_t rect = graphics_rect(x, y, width, height);
-    graphics_fill_rect(ctx->gfx, &rect, ctx->style.background);
+    graphics_fill_rect(ctx->gfx, &rect, ctx->style.foreground);
     graphics_draw_rect(ctx->gfx, &rect, ctx->style.border);
-    
-    /* Set cursor inside window */
-    ctx->cursor_x = x + ctx->style.padding;
-    ctx->cursor_y = y + ctx->style.padding + 20; /* Leave space for title */
     
     /* Draw title */
     if (title) {
@@ -255,12 +296,88 @@ bool ui_begin_window(ui_context_t* ctx, const char* title, i32 x, i32 y, i32 wid
                          ctx->style.text, ctx->style.font);
     }
     
+    /* Set up clipping for content area */
+    graphics_rect_t clip_rect = graphics_rect(
+        x + ctx->style.padding,
+        y + 24,
+        ctx->viewport_width - ctx->style.padding,
+        ctx->viewport_height
+    );
+    graphics_set_clip_rect(ctx->gfx, &clip_rect);
+    
+    /* Set cursor inside window with scroll offset */
+    ctx->cursor_x = x + ctx->style.padding;
+    ctx->cursor_y = y + ctx->style.padding + 24 - ctx->scroll_offset_y;
+    ctx->max_content_y = ctx->cursor_y; /* Track start */
+    
     return true;
 }
 
 void ui_end_window(ui_context_t* ctx) {
     if (!ctx) return;
-    /* Reset cursor */
+    
+    /* Calculate actual content height (how far down the content went) */
+    i32 content_start_y = ctx->window_bounds.y + 24;
+    ctx->content_height = (ctx->max_content_y + ctx->scroll_offset_y) - content_start_y;
+    
+    /* Clamp scroll offset to valid range */
+    i32 max_scroll = ctx->content_height - ctx->viewport_height;
+    if (max_scroll < 0) max_scroll = 0;
+    
+    /* Clamp the scroll offset */
+    if (ctx->scroll_offset_y < 0) ctx->scroll_offset_y = 0;
+    if (ctx->scroll_offset_y > max_scroll) ctx->scroll_offset_y = max_scroll;
+    
+    /* Clear clipping BEFORE drawing scrollbar */
+    graphics_clear_clip_rect(ctx->gfx);
+    
+    /* Draw vertical scrollbar if needed (AFTER clearing clip) */
+    if (ctx->content_height > ctx->viewport_height && max_scroll > 0) {
+        i32 scrollbar_x = ctx->window_bounds.x + ctx->window_bounds.width - ctx->style.scroll_bar_width;
+        i32 scrollbar_y = ctx->window_bounds.y + 24;
+        i32 scrollbar_height = ctx->viewport_height;
+        
+        /* Scrollbar track */
+        graphics_rect_t track = graphics_rect(scrollbar_x, scrollbar_y, ctx->style.scroll_bar_width, scrollbar_height);
+        graphics_fill_rect(ctx->gfx, &track, ctx->style.background);
+        
+        /* Scrollbar thumb */
+        f32 thumb_ratio = (f32)ctx->viewport_height / (f32)ctx->content_height;
+        i32 thumb_height = (i32)(scrollbar_height * thumb_ratio);
+        if (thumb_height < 20) thumb_height = 20;
+        if (thumb_height > scrollbar_height) thumb_height = scrollbar_height;
+        
+        f32 scroll_ratio = 0.0f;
+        if (max_scroll > 0) {
+            scroll_ratio = (f32)ctx->scroll_offset_y / (f32)max_scroll;
+        }
+        i32 thumb_y = scrollbar_y + (i32)((scrollbar_height - thumb_height) * scroll_ratio);
+        
+        graphics_rect_t thumb = graphics_rect(scrollbar_x, thumb_y, ctx->style.scroll_bar_width, thumb_height);
+        graphics_fill_rect(ctx->gfx, &thumb, ctx->style.accent);
+        
+        /* Handle scrollbar dragging */
+        ui_id_t scrollbar_id = ui_hash_string("__scrollbar_v");
+        bool thumb_hovered = point_in_rect(ctx->mouse_x, ctx->mouse_y, &thumb);
+        
+        if (thumb_hovered && ctx->mouse_down && ctx->active_id == 0) {
+            ctx->active_id = scrollbar_id;
+        }
+        
+        if (ctx->active_id == scrollbar_id && ctx->mouse_down) {
+            /* Calculate new scroll offset from mouse position */
+            i32 relative_y = ctx->mouse_y - scrollbar_y - (thumb_height / 2);
+            f32 new_scroll_ratio = (f32)relative_y / (f32)(scrollbar_height - thumb_height);
+            ctx->scroll_offset_y = (i32)(new_scroll_ratio * max_scroll);
+            
+            /* Clamp again */
+            if (ctx->scroll_offset_y < 0) ctx->scroll_offset_y = 0;
+            if (ctx->scroll_offset_y > max_scroll) ctx->scroll_offset_y = max_scroll;
+        }
+    }
+    
+    /* Reset state */
+    ctx->in_scroll_region = false;
     ctx->cursor_x = ctx->style.spacing;
     ctx->cursor_y = ctx->style.spacing;
 }
@@ -880,7 +997,12 @@ void ui_progress_bar(ui_context_t* ctx, f32 fraction) {
     graphics_draw_text(ctx->gfx, text, rect.x + (width - text_width) / 2,
                       rect.y + (height - text_height) / 2, ctx->style.text, ctx->style.font);
     
-    ctx->cursor_y += height + ctx->style.spacing;
+    ctx->cursor_y += rect.height + ctx->style.spacing;
+    if (ctx->cursor_y > ctx->max_content_y) ctx->max_content_y = ctx->cursor_y;
+    
+    if (!ctx->same_line) {
+        ctx->cursor_x = ctx->style.padding;
+    }
 }
 
 void ui_image(ui_context_t* ctx, graphics_image_t* image, i32 width, i32 height) {

@@ -49,6 +49,10 @@ void on_event(const engine_event_t* event, void* user_data) {
             ui_input_mouse_button(state->ui, false);
             break;
             
+        case ENGINE_EVENT_MOUSE_WHEEL:
+            ui_input_mouse_wheel(state->ui, event->data.mouse_wheel.delta);
+            break;
+            
         case ENGINE_EVENT_KEY_PRESS:
             /* Handle text input */
             if (event->data.key.key >= ENGINE_KEY_A && event->data.key.key <= ENGINE_KEY_Z) {
