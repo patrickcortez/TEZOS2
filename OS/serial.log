@@ -1,0 +1,5 @@
+
+[KERNEL] Booted!
+[GDT] Initializing Global Descriptor Table...
+[GDT] GDT and TSS loaded
+[KERNEL] Heap Initialized at: 0x11DD04

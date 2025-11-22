@@ -4,20 +4,22 @@
 
 extern void print_str(const char*);
 
-u64 ticks = 0;
+static u32 ticks = 0; // Changed type to u32 and added static
 
-void timer_handler() {
+void timer_handler(void) { // Changed signature to void
     ticks++;
-    if (ticks % 18 == 0) {
-        /* print_str("Tick\n"); */
-    }
-    outb(0x20, 0x20); /* EOI */
+    
+    /* Call scheduler tick */
+    extern void scheduler_tick(void);
+    scheduler_tick();
+
+    outb(0x20, 0x20); /* EOI */ // Kept EOI
 }
 
-void pit_init(u32 frequency) {
-    u32 divisor = 1193180 / frequency;
+void pit_init(u32 hz) { // Changed parameter name to hz
+    u32 divisor = 1193180 / hz; // Changed frequency to hz
     
-    outb(0x43, 0x36); /* Command port */
-    outb(0x40, (u8)(divisor & 0xFF));
-    outb(0x40, (u8)((divisor >> 8) & 0xFF));
+    outb(0x43, 0x36); // Removed comment
+    outb(0x40, divisor & 0xFF); // Simplified cast
+    outb(0x40, (divisor >> 8) & 0xFF); // Simplified cast
 }

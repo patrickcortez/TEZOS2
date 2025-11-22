@@ -51,4 +51,14 @@ struct multiboot_tag_framebuffer {
     struct multiboot_tag_framebuffer_common common;
 };
 
+struct multiboot_tag_module {
+    u32 type;
+    u32 size;
+    u32 mod_start;
+    u32 mod_end;
+    char cmdline[];
+};
+
+#define MULTIBOOT_TAG_TYPE_MODULE 3
+
 #endif

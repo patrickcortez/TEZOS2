@@ -29,9 +29,10 @@ void pmm_init(u64 mem_size) {
         pmm_bitmap[i] = 0xFF;
     }
     
-    print_str("PMM Initialized. Total Memory: ");
-    print_hex(total_memory);
-    print_str("\n");
+    /* Mark all as used initially */
+    for (int i = 0; i < PMM_BITMAP_SIZE; i++) {
+        pmm_bitmap[i] = 0xFF;
+    }
 }
 
 void pmm_free_region(u64 base, u64 length) {

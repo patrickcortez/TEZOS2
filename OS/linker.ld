@@ -1,7 +1,9 @@
 ENTRY(start)
 
 SECTIONS {
-    . = 1M;
+    . = 0x10000;
+
+    _kernel_start = .;
 
     .boot :
     {
@@ -12,4 +14,22 @@ SECTIONS {
     {
         *(.text)
     }
+
+    .rodata :
+    {
+        *(.rodata)
+    }
+
+    .data :
+    {
+        *(.data)
+    }
+
+    .bss :
+    {
+        *(.bss)
+    }
+
+    _end = .;
+    _kernel_end = .;
 }
